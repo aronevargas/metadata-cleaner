@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>Editor de Metadados</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%233b82f6'/%3E%3Cpath d='M9 22V10l7 7 7-7v12' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Pular para o conteúdo</a>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">M</span>
+        <div>
+          <h1>Editor de Metadados</h1>
+          <p class="brand-sub">Processamento local de imagens e vídeos</p>
+        </div>
+      </div>
+      <ul class="status-chips" id="status-chips" aria-label="Estado do sistema">
+        <li class="chip chip-pending" id="chip-server">Conectando…</li>
+      </ul>
+    </div>
+  </header>
+
+  <main id="main" class="container">
+    <div id="error-banner" class="banner banner-error" role="alert" hidden>
+      <div class="banner-body">
+        <strong class="banner-title">Algo deu errado</strong>
+        <p id="error-text"></p>
+      </div>
+      <button type="button" class="btn-icon" id="error-close" aria-label="Fechar aviso">×</button>
+    </div>
+
+    <section class="intro card">
+      <p>
+        Este programa cria <strong>cópias</strong> dos seus arquivos em outra pasta, com os
+        <strong>metadados removidos ou substituídos</strong> e, opcionalmente, <strong>pequenas variações
+        discretas nos pixels</strong>. As cópias são numeradas (<code>1.jpg</code>, <code>2.mp4</code>, …)
+        mantendo a extensão. <strong>Os originais nunca são alterados.</strong>
+      </p>
+      <p class="muted small">
+        Observação: o conteúdo binário das cópias muda, mas isso não garante que serviços ou sistemas de
+        reconhecimento tratem as cópias como mídias diferentes.
+      </p>
+    </section>
+
+    <!-- Passo 1: pastas -->
+    <section class="card step" aria-labelledby="step1-title">
+      <div class="step-head">
+        <span class="step-num" aria-hidden="true">1</span>
+        <h2 id="step1-title">Escolha as pastas</h2>
+      </div>
+
+      <p id="picker-note" class="note" hidden>
+        O seletor de pastas do sistema não está disponível neste computador. Digite ou cole o caminho
+        completo da pasta (por exemplo, <code>/home/usuario/Imagens</code> ou <code>~/Imagens</code>).
+      </p>
+
+      <form id="folders-form" class="folders" novalidate>
+        <div class="field">
+          <label for="input-dir">Pasta de entrada <span class="muted">(arquivos originais)</span></label>
+          <div class="input-row">
+            <input id="input-dir" name="input_dir" type="text" autocomplete="off" spellcheck="false"
+                   placeholder="/caminho/da/pasta/de/entrada" aria-describedby="input-dir-help" required>
+            <button type="button" class="btn btn-secondary" id="pick-input" data-target="input-dir"
+                    data-title="Escolha a pasta de entrada">Escolher…</button>
+          </div>
+          <p class="help" id="input-dir-help">Somente leitura: nada aqui será modificado.</p>
+        </div>
+
+        <div class="field">
+          <label for="output-dir">Pasta de saída <span class="muted">(onde as cópias serão salvas)</span></label>
+          <div class="input-row">
+            <input id="output-dir" name="output_dir" type="text" autocomplete="off" spellcheck="false"
+                   placeholder="/caminho/da/pasta/de/saida" aria-describedby="output-dir-help" required>
+            <button type="button" class="btn btn-secondary" id="pick-output" data-target="output-dir"
+                    data-title="Escolha a pasta de saída">Escolher…</button>
+          </div>
+          <p class="help" id="output-dir-help">Deve ser diferente da pasta de entrada. Será criada se não existir; arquivos existentes não são sobrescritos.</p>
+        </div>
+
+        <div class="row-between">
+          <label class="check">
+            <input type="checkbox" id="recursive">
+            <span>Incluir subpastas</span>
+          </label>
+          <button type="submit" class="btn btn-primary" id="scan-btn">Listar arquivos</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Passo 2: arquivos -->
+    <section class="card step" aria-labelledby="step2-title">
+      <div class="step-head">
+        <span class="step-num" aria-hidden="true">2</span>
+        <h2 id="step2-title">Arquivos encontrados</h2>
+        <span class="step-meta" id="file-counts" aria-live="polite"></span>
+      </div>
+
+      <div id="scan-warnings" class="banner banner-warn" role="status" hidden></div>
+
+      <div id="empty-state" class="empty">
+        <svg aria-hidden="true" viewBox="0 0 48 48" width="48" height="48"><path d="M6 14a4 4 0 0 1 4-4h9l4 5h15a4 4 0 0 1 4 4v15a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V14Z" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/></svg>
+        <p id="empty-title" class="empty-title">Nenhuma pasta listada ainda</p>
+        <p id="empty-text" class="muted">Escolha a pasta de entrada e clique em <strong>Listar arquivos</strong>.</p>
+      </div>
+
+      <div id="file-list-wrap" class="table-wrap" hidden>
+        <table class="table" id="file-list">
+          <caption class="sr-only">Arquivos que serão processados, na ordem de numeração</caption>
+          <thead>
+            <tr>
+              <th scope="col" class="num">#</th>
+              <th scope="col">Arquivo</th>
+              <th scope="col">Tipo</th>
+              <th scope="col" class="num hide-sm">Tamanho</th>
+              <th scope="col">Saída prevista</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="help" id="numbering-help" hidden>
+        A numeração começa no primeiro número livre da pasta de saída. Se algum arquivo falhar, os números seguintes avançam (os números só são usados por arquivos gerados com sucesso).
+      </p>
+
+      <details id="skipped-wrap" class="skipped" hidden>
+        <summary id="skipped-summary">Arquivos ignorados</summary>
+        <ul id="skipped-list"></ul>
+      </details>
+    </section>
+
+    <!-- Passo 3: opções e execução -->
+    <section class="card step" aria-labelledby="step3-title">
+      <div class="step-head">
+        <span class="step-num" aria-hidden="true">3</span>
+        <h2 id="step3-title">Transformação</h2>
+      </div>
+
+      <form id="options-form" class="options" novalidate>
+        <fieldset>
+          <legend>Metadados</legend>
+          <label class="radio">
+            <input type="radio" name="metadata_mode" value="strip" checked>
+            <span><strong>Remover todos</strong><span class="muted block">EXIF, GPS, datas, câmera, título etc.</span></span>
+          </label>
+          <label class="radio">
+            <input type="radio" name="metadata_mode" value="replace">
+            <span><strong>Remover e gravar novos</strong><span class="muted block">Remove tudo e grava só os campos preenchidos abaixo.</span></span>
+          </label>
+          <div id="meta-fields" class="meta-grid" hidden>
+            <div class="field"><label for="meta-title">Título</label><input id="meta-title" data-meta="title" type="text"></div>
+            <div class="field"><label for="meta-artist">Autor</label><input id="meta-artist" data-meta="artist" type="text"></div>
+            <div class="field"><label for="meta-copyright">Direitos autorais</label><input id="meta-copyright" data-meta="copyright" type="text"></div>
+            <div class="field"><label for="meta-software">Software</label><input id="meta-software" data-meta="software" type="text"></div>
+            <div class="field span-2"><label for="meta-comment">Comentário</label><input id="meta-comment" data-meta="comment" type="text"></div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Pixels</legend>
+          <label class="check">
+            <input type="checkbox" id="pixel-noise" checked>
+            <span>Aplicar variação discreta de pixels <span class="muted">(imperceptível a olho nu)</span></span>
+          </label>
+          <div class="field range-field" id="strength-field">
+            <label for="noise-strength">Intensidade: <output id="noise-strength-out" for="noise-strength">1 · sutil</output></label>
+            <input type="range" id="noise-strength" min="1" max="3" step="1" value="1" aria-describedby="noise-help">
+            <p class="help" id="noise-help">1 = sutil, 2 = moderada, 3 = maior. Vídeos são recodificados.</p>
+          </div>
+        </fieldset>
+      </form>
+
+      <div class="actions">
+        <button type="button" class="btn btn-primary btn-lg" id="start-btn" disabled>Iniciar transformação</button>
+        <button type="button" class="btn btn-danger" id="cancel-btn" hidden>Cancelar</button>
+        <p class="help" id="start-help">Liste os arquivos primeiro.</p>
+      </div>
+
+      <div id="progress" class="progress-box" hidden>
+        <div class="progress-head">
+          <span id="progress-label">Preparando…</span>
+          <span id="progress-count" class="mono">0 / 0</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-bar" id="progress-bar" role="progressbar" aria-labelledby="progress-label"
+               aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+        </div>
+        <p class="muted small" id="progress-current" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <!-- Resultado -->
+    <section class="card step" aria-labelledby="step4-title" id="results" hidden tabindex="-1">
+      <div class="step-head">
+        <span class="step-num" aria-hidden="true">✓</span>
+        <h2 id="step4-title">Resultado</h2>
+      </div>
+      <div id="result-summary" class="summary" role="status"></div>
+      <div class="table-wrap">
+        <table class="table" id="result-table">
+          <caption class="sr-only">Resultado por arquivo</caption>
+          <thead>
+            <tr>
+              <th scope="col">Original</th>
+              <th scope="col">Cópia gerada</th>
+              <th scope="col">Situação</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer container">
+    <p class="muted small">Tudo roda no seu computador. Nenhum arquivo é enviado para a internet.</p>
+  </footer>
+
+  <script src="app.js" defer></script>
+</body>
+</html>

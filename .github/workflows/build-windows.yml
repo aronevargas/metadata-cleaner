@@ -1,0 +1,73 @@
+# Builds and smoke-tests the Windows desktop app on a GitHub-hosted Windows runner.
+# MANUAL ONLY (workflow_dispatch): nothing runs on push/PR. Not triggered by this repo's agents.
+# Result: artifact "metadata-editor-windows-x64" (zip of dist\metadata-editor + self-check JSON + junit XML).
+# Blocking: install self-check, exe self-check (video required) and tests/test_windows_*.py.
+# FFmpeg is installed on the runner (Chocolatey) only to test videos; it is NOT bundled in the zip.
+name: build-windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_tests:
+        description: "Also run the pytest suite (informational)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install FFmpeg (runner only, for video tests)
+        run: choco install ffmpeg -y --no-progress
+
+      - name: Install app (.venv) and self-check from source
+        run: |
+          $env:Path = "C:\ProgramData\chocolatey\bin;" + $env:Path
+          .\packaging\windows\install.ps1 -Dev -Python python
+
+      - name: Test suite (informational)
+        if: ${{ inputs.run_tests }}
+        continue-on-error: true
+        run: .\.venv\Scripts\python.exe -m pytest -q tests --junitxml=dist/pytest-all.xml
+
+      - name: Build exe with PyInstaller + self-check of the built exe (video required)
+        run: |
+          $env:Path = "C:\ProgramData\chocolatey\bin;" + $env:Path
+          .\packaging\windows\build-exe.ps1 -Zip -RequireVideo
+
+      - name: Windows-specific tests (BLOCKING)
+        run: |
+          $env:Path = "C:\ProgramData\chocolatey\bin;" + $env:Path
+          .\.venv\Scripts\python.exe -m pytest -q -rs tests/test_windows_native.py tests/test_windows_compat.py --junitxml=dist/pytest-windows.xml
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: metadata-editor-windows-x64
+          path: |
+            dist/metadata-editor-windows-x64.zip
+            dist/selfcheck-windows.json
+            dist/pytest-*.xml
+          if-no-files-found: error
+
+      - name: Upload test reports even on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: metadata-editor-windows-reports
+          path: |
+            dist/selfcheck-windows.json
+            dist/pytest-*.xml
+          if-no-files-found: ignore

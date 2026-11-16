@@ -1,0 +1,3 @@
+# Build the standalone app (PyInstaller must run on the target OS; no cross-compiling).
+-r requirements.txt
+pyinstaller==6.22.3

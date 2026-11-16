@@ -1,0 +1,3 @@
+# Desktop app (default). Tkinter comes with Python (Linux: python3-tk package).
+pillow==13.0.0
+numpy==2.5.5
